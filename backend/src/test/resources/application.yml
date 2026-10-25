@@ -1,0 +1,27 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:quickshop;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE;NON_KEYWORDS=VALUE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    open-in-view: false
+  ai:
+    openai:
+      api-key: none
+
+app:
+  jwt:
+    secret: test-secret-key-for-unit-tests-only
+    expiration-ms: 3600000
+  cors:
+    allowed-origins: http://localhost:5173
+  seed:
+    enabled: true
+
+logging:
+  level:
+    root: WARN
+    com.rikkei.quickshop: INFO
