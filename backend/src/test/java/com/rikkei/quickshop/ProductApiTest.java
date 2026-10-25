@@ -26,7 +26,7 @@ class ProductApiTest extends ApiTestSupport {
                 .andExpect(jsonPath("$.totalElements", greaterThanOrEqualTo(16)))
                 .andExpect(jsonPath("$.content[0].name").exists())
                 .andExpect(jsonPath("$.content[0].price").exists())
-                .andExpect(jsonPath("$.content[0].imageUrl").exists());
+                .andExpect(jsonPath("$.content[0].stock").isNumber());
     }
 
     @Test
