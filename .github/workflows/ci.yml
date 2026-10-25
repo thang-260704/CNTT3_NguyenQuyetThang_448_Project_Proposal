@@ -49,11 +49,24 @@ jobs:
               chunk = '%0A'.join(l.replace('%', '%25').replace('\r', '') for l in lines[i:i+6])
               print(f"::error title=Backend failure {i//6+1}::{chunk}")
           PY
+      - name: Test summary
+        if: always()
+        run: |
+          python3 - << 'PY'
+          import glob, xml.etree.ElementTree as ET
+          t = f = e = s = 0
+          for x in glob.glob('build/test-results/test/*.xml'):
+              r = ET.parse(x).getroot()
+              t += int(r.get('tests')); f += int(r.get('failures')); e += int(r.get('errors')); s += int(r.get('skipped'))
+          msg = f"Backend tests: {t} total, {t-f-e-s} passed, {f+e} failed, {s} skipped"
+          print(f"::notice title=Backend test summary::{msg}")
+          open(__import__('os').environ['GITHUB_STEP_SUMMARY'], 'a').write('### ' + msg + '\n')
+          PY
       - name: Build jar
         run: ./gradlew --no-daemon bootJar
       - name: Upload test report
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: backend-test-report
           path: |
@@ -76,9 +89,13 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run lint
-      - run: npm test
+      - run: npm test -- --reporter=default --reporter=json --outputFile=vitest-result.json
+      - name: Test summary
+        if: always()
+        run: |
+          node -e "const r=require('./vitest-result.json');console.log('::notice title=Frontend test summary::Frontend tests: '+r.numTotalTests+' total, '+r.numPassedTests+' passed, '+r.numFailedTests+' failed')"
       - run: npm run build
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         with:
           name: frontend-dist
           path: frontend/dist
@@ -101,20 +118,27 @@ jobs:
           done
           docker compose ps; docker compose logs backend | tail -100; exit 1
       - name: Smoke test (E2E qua Nginx)
-        run: bash scripts/smoke-test.sh
+        run: |
+          set -o pipefail
+          bash scripts/smoke-test.sh | tee smoke.log
+          echo "::notice title=Smoke test E2E::$(tail -1 smoke.log)"
       - name: Load test k6 - 50 concurrent users, p95 < 500ms
         run: |
           docker run --rm --network host -v "$PWD/tests/load:/scripts" grafana/k6:0.54.0 \
             run --summary-export=/scripts/k6-summary.json /scripts/products.js
+      - name: k6 summary
+        if: always()
+        run: |
+          node -e "const m=require('./tests/load/k6-summary.json').metrics;const d=m.http_req_duration;const r=m.http_reqs;const f=m.http_req_failed;console.log('::notice title=k6 load test (50 VUs, 30s)::requests='+r.count+' rps='+r.rate.toFixed(1)+' avg='+d.avg.toFixed(1)+'ms p90='+d['p(90)'].toFixed(1)+'ms p95='+d['p(95)'].toFixed(1)+'ms max='+d.max.toFixed(1)+'ms failed='+(f.value*100).toFixed(2)+'% checks='+(m.checks.value*100).toFixed(2)+'%')"
       - name: Lighthouse - First Contentful Paint (NFR-02)
         continue-on-error: true
         run: |
           npx --yes @lhci/cli@0.14.0 collect --url=http://localhost:3000/ --numberOfRuns=1 \
             --settings.preset=desktop --settings.chromeFlags="--no-sandbox --headless=new"
-          node -e "const fs=require('fs');const d='.lighthouseci';const f=fs.readdirSync(d).find(x=>x.endsWith('.json')&&x.startsWith('lhr'));const r=JSON.parse(fs.readFileSync(d+'/'+f));const fcp=r.audits['first-contentful-paint'].numericValue;console.log('FCP =',Math.round(fcp),'ms');fs.writeFileSync('tests/load/lighthouse-fcp.txt','FCP='+Math.round(fcp)+'ms\nPerformance='+Math.round(r.categories.performance.score*100)+'\n');"
+          node -e "const fs=require('fs');const d='.lighthouseci';const f=fs.readdirSync(d).find(x=>x.endsWith('.json')&&x.startsWith('lhr'));const r=JSON.parse(fs.readFileSync(d+'/'+f));const fcp=r.audits['first-contentful-paint'].numericValue;console.log('::notice title=Lighthouse (desktop)::FCP='+Math.round(fcp)+'ms LCP='+Math.round(r.audits['largest-contentful-paint'].numericValue)+'ms Performance='+Math.round(r.categories.performance.score*100)+' Accessibility='+Math.round(r.categories.accessibility.score*100));fs.writeFileSync('tests/load/lighthouse-fcp.txt','FCP='+Math.round(fcp)+'ms\nPerformance='+Math.round(r.categories.performance.score*100)+'\n');"
       - name: Upload performance results
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: performance-results
           path: |

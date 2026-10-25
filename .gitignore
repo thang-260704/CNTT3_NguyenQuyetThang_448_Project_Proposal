@@ -15,3 +15,4 @@ frontend/coverage/
 Thumbs.db
 # Env
 .env
+frontend/vitest-result.json
