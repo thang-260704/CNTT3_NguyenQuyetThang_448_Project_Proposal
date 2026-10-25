@@ -1,0 +1,60 @@
+name: quickshop
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: quickshop-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123}
+      MYSQL_DATABASE: quickshop
+      MYSQL_USER: ${DB_USERNAME:-quickshop}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-quickshop123}
+      TZ: Asia/Ho_Chi_Minh
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "3307:3306"
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  backend:
+    build: ./backend
+    image: quickshop-backend:local
+    container_name: quickshop-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:mysql://mysql:3306/quickshop?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Ho_Chi_Minh&characterEncoding=UTF-8
+      DB_USERNAME: ${DB_USERNAME:-quickshop}
+      DB_PASSWORD: ${DB_PASSWORD:-quickshop123}
+      JWT_SECRET: ${JWT_SECRET:-quickshop-docker-secret-key-please-change-in-production-2026}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}
+      AI_API_KEY: ${AI_API_KEY:-none}
+      AI_BASE_URL: ${AI_BASE_URL:-https://api.openai.com}
+      AI_COMPLETIONS_PATH: ${AI_COMPLETIONS_PATH:-/v1/chat/completions}
+      AI_MODEL: ${AI_MODEL:-gpt-4o-mini}
+    ports:
+      - "8081:8080"
+    mem_limit: 768m
+
+  frontend:
+    build: ./frontend
+    image: quickshop-frontend:local
+    container_name: quickshop-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "3000:80"
+    mem_limit: 128m
+
+volumes:
+  mysql_data:
