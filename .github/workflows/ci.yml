@@ -124,7 +124,7 @@ jobs:
           echo "::notice title=Smoke test E2E::$(tail -1 smoke.log)"
       - name: Load test k6 - 50 concurrent users, p95 < 500ms
         run: |
-          docker run --rm --network host -v "$PWD/tests/load:/scripts" grafana/k6:0.54.0 \
+          docker run --rm --network host -u "$(id -u):$(id -g)" -v "$PWD/tests/load:/scripts" grafana/k6:0.54.0 \
             run --summary-export=/scripts/k6-summary.json /scripts/products.js
       - name: k6 summary
         if: always()
